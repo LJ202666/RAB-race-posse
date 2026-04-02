@@ -5,7 +5,10 @@ import EventsScreen from "./screens/EventsScreen";
 import GroupScreen from "./screens/GroupScreen";
 import LogisticsScreen from "./screens/LogisticsScreen";
 import MyRunsScreen from "./screens/MyRunsScreen";
-import { events as initialEvents, members, myRuns as initialMyRuns } from "./data/mockData";
+import { useEvents, useMembers, useMyRuns } from "./hooks/useSupabase";
+
+// Change this to your own member ID from Supabase
+const MY_MEMBER_ID = 1;
 
 const tabs = [
   { id: "events", label: "Events", icon: Calendar },
@@ -16,8 +19,11 @@ const tabs = [
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("events");
-  const [events, setEvents] = useState(initialEvents);
-  const [myRuns, setMyRuns] = useState(initialMyRuns);
+  const { events, loading: eventsLoading, addEvent, rsvp } = useEvents();
+  const { members, loading: membersLoading } = useMembers();
+  const { myRuns, loading: runsLoading, addRun } = useMyRuns(MY_MEMBER_ID);
+
+  const loading = eventsLoading || membersLoading;
 
   return (
     <div className="app">
@@ -37,11 +43,30 @@ export default function App() {
         </div>
       </div>
 
-      {/* Screen content */}
-      {activeTab === "events" && <EventsScreen events={events} setEvents={setEvents} />}
-      {activeTab === "group" && <GroupScreen members={members} events={events} />}
-      {activeTab === "logistics" && <LogisticsScreen events={events} />}
-      {activeTab === "my-runs" && <MyRunsScreen myRuns={myRuns} setMyRuns={setMyRuns} />}
+      {loading ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
+          <div style={{ width: 40, height: 40, border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+          <div style={{ color: "var(--text2)", fontSize: 14 }}>Loading your posse...</div>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      ) : (
+        <>
+          {activeTab === "events" && (
+            <EventsScreen
+              events={events}
+              members={members}
+              myMemberId={MY_MEMBER_ID}
+              onAddEvent={addEvent}
+              onRsvp={rsvp}
+            />
+          )}
+          {activeTab === "group" && <GroupScreen members={members} events={events} />}
+          {activeTab === "logistics" && <LogisticsScreen events={events} />}
+          {activeTab === "my-runs" && (
+            <MyRunsScreen myRuns={myRuns} onAddRun={addRun} loading={runsLoading} />
+          )}
+        </>
+      )}
 
       {/* Tab bar */}
       <nav className="tab-bar">
