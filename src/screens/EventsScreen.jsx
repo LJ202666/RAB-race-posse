@@ -1,8 +1,5 @@
 import { useState } from "react";
 import { Calendar, MapPin, Users, ChevronRight, Plus, X, Check, HelpCircle, Globe } from "lucide-react";
-import { members } from "../data/mockData";
-
-const MY_ID = 1;
 
 function formatDate(d) {
   const date = new Date(d + "T00:00:00");
@@ -14,10 +11,10 @@ function daysUntil(d) {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-function EventDetail({ event, onClose, onRsvp }) {
+function EventDetail({ event, members, myMemberId, onClose, onRsvp }) {
   const goingMembers = members.filter(m => event.going.includes(m.id));
   const maybeMembers = members.filter(m => event.maybe.includes(m.id));
-  const myStatus = event.going.includes(MY_ID) ? "going" : event.maybe.includes(MY_ID) ? "maybe" : null;
+  const myStatus = event.going.includes(myMemberId) ? "going" : event.maybe.includes(myMemberId) ? "maybe" : null;
 
   return (
     <div className="sheet-overlay" onClick={onClose}>
@@ -34,35 +31,31 @@ function EventDetail({ event, onClose, onRsvp }) {
             <X size={18} />
           </button>
         </div>
-
         <p style={{ color: "var(--text2)", fontSize: 14, marginBottom: 16 }}>{event.description}</p>
-
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-          {event.distances.map(d => (
+          {(event.distances || []).map(d => (
             <span key={d} style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 8, padding: "4px 12px", fontSize: 13, fontWeight: 600 }}>{d}</span>
           ))}
-          <a href={event.website} target="_blank" rel="noopener noreferrer"
-            style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 8, padding: "4px 12px", fontSize: 13, color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
-            <Globe size={13} /> Website
-          </a>
+          {event.website && (
+            <a href={event.website} target="_blank" rel="noopener noreferrer"
+              style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 8, padding: "4px 12px", fontSize: 13, color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+              <Globe size={13} /> Website
+            </a>
+          )}
         </div>
-
         <div className="divider" />
-
         <div className="section-label">Your RSVP</div>
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          <button className="btn btn-sm" onClick={() => onRsvp(event.id, "going")}
+          <button className="btn btn-sm" onClick={() => onRsvp(event.id, myMemberId, "going")}
             style={{ background: myStatus === "going" ? "var(--green)" : "var(--surface2)", color: myStatus === "going" ? "#000" : "var(--text)", border: "1px solid var(--border)", flex: 1 }}>
             <Check size={14} /> Going
           </button>
-          <button className="btn btn-sm" onClick={() => onRsvp(event.id, "maybe")}
+          <button className="btn btn-sm" onClick={() => onRsvp(event.id, myMemberId, "maybe")}
             style={{ background: myStatus === "maybe" ? "var(--accent2)" : "var(--surface2)", color: myStatus === "maybe" ? "#000" : "var(--text)", border: "1px solid var(--border)", flex: 1 }}>
             <HelpCircle size={14} /> Maybe
           </button>
         </div>
-
         <div className="divider" />
-
         <div style={{ display: "flex", gap: 20, marginBottom: 16 }}>
           <div>
             <div className="section-label">Going ({goingMembers.length})</div>
@@ -90,17 +83,12 @@ function AddEventSheet({ onClose, onAdd }) {
   const [form, setForm] = useState({ name: "", date: "", location: "", distances: "", website: "", description: "" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const submit = () => {
+  const submit = async () => {
     if (!form.name || !form.date) return;
-    onAdd({
-      id: Date.now(),
-      name: form.name,
-      date: form.date,
-      location: form.location,
+    await onAdd({
+      name: form.name, date: form.date, location: form.location,
       distances: form.distances.split(",").map(s => s.trim()).filter(Boolean),
-      website: form.website,
-      description: form.description,
-      going: [], maybe: [],
+      website: form.website, description: form.description,
       travel: null, accommodation: null, carpool: [], postRace: null,
     });
     onClose();
@@ -141,24 +129,9 @@ function AddEventSheet({ onClose, onAdd }) {
   );
 }
 
-export default function EventsScreen({ events, setEvents }) {
+export default function EventsScreen({ events, members, myMemberId, onAddEvent, onRsvp }) {
   const [detail, setDetail] = useState(null);
   const [adding, setAdding] = useState(false);
-
-  const handleRsvp = (eventId, status) => {
-    setEvents(evs => evs.map(ev => {
-      if (ev.id !== eventId) return ev;
-      let going = ev.going.filter(id => id !== MY_ID);
-      let maybe = ev.maybe.filter(id => id !== MY_ID);
-      if (status === "going") going = [...going, MY_ID];
-      else maybe = [...maybe, MY_ID];
-      const updated = { ...ev, going, maybe };
-      if (detail?.id === eventId) setDetail(updated);
-      return updated;
-    }));
-  };
-
-  const handleAdd = (event) => setEvents(evs => [...evs, event]);
 
   const upcoming = events.filter(e => daysUntil(e.date) >= 0).sort((a, b) => new Date(a.date) - new Date(b.date));
   const past = events.filter(e => daysUntil(e.date) < 0);
@@ -176,14 +149,20 @@ export default function EventsScreen({ events, setEvents }) {
           </button>
         </div>
       </div>
-
       <div style={{ padding: "0 16px" }}>
+        {events.length === 0 && (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text3)" }}>
+            <Calendar size={40} strokeWidth={1} style={{ margin: "0 auto 12px", opacity: 0.4 }} />
+            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 6 }}>No events yet</div>
+            <div style={{ fontSize: 14 }}>Add your first event above</div>
+          </div>
+        )}
         {upcoming.length > 0 && (
           <>
             <div className="section-label" style={{ marginBottom: 12 }}>Upcoming</div>
             {upcoming.map(ev => {
               const days = daysUntil(ev.date);
-              const myStatus = ev.going.includes(MY_ID) ? "going" : ev.maybe.includes(MY_ID) ? "maybe" : null;
+              const myStatus = ev.going.includes(myMemberId) ? "going" : ev.maybe.includes(myMemberId) ? "maybe" : null;
               return (
                 <div key={ev.id} className="card" style={{ marginBottom: 12, cursor: "pointer" }} onClick={() => setDetail(ev)}>
                   <div style={{ padding: "14px 16px" }}>
@@ -197,15 +176,12 @@ export default function EventsScreen({ events, setEvents }) {
                       </div>
                       <ChevronRight size={18} color="var(--text3)" style={{ flexShrink: 0, marginTop: 2 }} />
                     </div>
-
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "var(--text2)" }}>
-                          <Users size={13} />
-                          <span style={{ color: "var(--green)", fontWeight: 600 }}>{ev.going.length}</span> going ·&nbsp;
-                          <span style={{ color: "var(--accent2)", fontWeight: 600 }}>{ev.maybe.length}</span> maybe
-                        </span>
-                      </div>
+                      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "var(--text2)" }}>
+                        <Users size={13} />
+                        <span style={{ color: "var(--green)", fontWeight: 600 }}>{ev.going.length}</span> going ·&nbsp;
+                        <span style={{ color: "var(--accent2)", fontWeight: 600 }}>{ev.maybe.length}</span> maybe
+                      </span>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         {myStatus && <span className={`pill pill-${myStatus}`}>{myStatus === "going" ? "✓ Going" : "? Maybe"}</span>}
                         <span style={{ fontSize: 12, color: days <= 14 ? "var(--accent)" : "var(--text3)", fontWeight: 600 }}>
@@ -220,9 +196,8 @@ export default function EventsScreen({ events, setEvents }) {
           </>
         )}
       </div>
-
-      {detail && <EventDetail event={detail} onClose={() => setDetail(null)} onRsvp={handleRsvp} />}
-      {adding && <AddEventSheet onClose={() => setAdding(false)} onAdd={handleAdd} />}
+      {detail && <EventDetail event={detail} members={members} myMemberId={myMemberId} onClose={() => setDetail(null)} onRsvp={onRsvp} />}
+      {adding && <AddEventSheet onClose={() => setAdding(false)} onAdd={onAddEvent} />}
     </div>
   );
 }
