@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trophy, Clock, Ruler, Star, X } from "lucide-react";
+import { Plus, Trophy, Clock, Ruler, Star } from "lucide-react";
 
 function formatDate(d) {
   return new Date(d + "T00:00:00").toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });

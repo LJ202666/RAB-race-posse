@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { UserPlus, X, Timer, Footprints } from "lucide-react";
+import { UserPlus, Timer, Footprints } from "lucide-react";
 
 function InviteSheet({ onClose }) {
   const [email, setEmail] = useState("");
